@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="sk" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procesné Riadenie - Smart IS</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        poppins: ['Poppins', 'sans-serif'],
+                    },
+                    colors: {
+                        dark: '#0f172a',
+                        card: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { transition: background 0.4s ease, color 0.4s ease; min-height: 100vh; display: flex; flex-direction: column; }
+        
+        .theme-light {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            color: #1f2937;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+        ::-webkit-scrollbar-thumb { background: #64748b; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* --- ŠTÝLY PRE OTÁZKY (Flashcards) --- */
+        .hl-blue { background-color: #dbeafe; color: #1e3a8a; font-weight: 700; padding: 2px 6px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .hl-red { background-color: #fee2e2; color: #991b1b; font-weight: 700; padding: 2px 6px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .hl-green { background-color: #dcfce7; color: #166534; font-weight: 700; padding: 2px 6px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .hl-purple { background-color: #f3e8ff; color: #6b21a8; font-weight: 700; padding: 2px 6px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .hl-orange { background-color: #ffedd5; color: #9a3412; font-weight: 700; padding: 2px 6px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+        .flashcard-container { perspective: 1000px; cursor: pointer; min-height: 340px; }
+        @media (max-width: 640px) { .flashcard-container { min-height: 280px; } }
+
+        .flashcard { position: relative; width: 100%; height: 100%; transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1); transform-style: preserve-3d; }
+        .flashcard.flipped { transform: rotateY(180deg); }
+        
+        .flashcard-front, .flashcard-back { 
+            position: absolute; 
+            top: 0; 
+            left: 0;
+            width: 100%; 
+            height: 100%; 
+            -webkit-backface-visibility: hidden; 
+            backface-visibility: hidden; 
+            border-radius: 1rem; 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); 
+            background-color: white; 
+            padding: 1.5rem;
+            overflow: hidden;
+            border-top: 6px solid transparent;
+        }
+
+        @media (max-width: 640px) {
+            .flashcard-front, .flashcard-back { padding: 1.25rem; padding-top: 1.5rem; }
+        }
+        
+        .flashcard-front { z-index: 2; transform: rotateY(0deg); display: flex; flex-direction: column; }
+        .flashcard-back { transform: rotateY(180deg); z-index: 1; }
+
+        .scroll-container {
+            width: 100%; height: 100%; overflow-y: auto; overflow-x: hidden;
+            -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+            padding: 0; padding-top: 0.5rem; display: flex; flex-direction: column;
+        }
+
+        .flashcard.flipped .flashcard-front { pointer-events: none; }
+        .flashcard:not(.flipped) .flashcard-back { pointer-events: none; }
+
+        .watermark { position: absolute; bottom: -15px; right: -15px; font-size: 7rem; color: rgba(0,0,0,0.025); z-index: 0; pointer-events: none; }
+        @media (max-width: 640px) { .watermark { font-size: 4.5rem; bottom: -10px; right: -10px; } }
+
+        .content-z { position: relative; z-index: 10; height: 100%; }
+        .btn-filter-q.active { background-color: #3b82f6; color: white; border-color: #3b82f6; }
+        
+        .filter-scroll {
+            display: flex; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; padding-bottom: 8px;
+        }
+        .filter-scroll::-webkit-scrollbar { display: none; }
+        .star-btn { z-index: 20; position: relative; }
+
+        /* Navbar switch UI */
+        .nav-switch-btn { transition: all 0.3s ease; }
+        .nav-switch-btn.active { background-color: #3b82f6; color: white; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); }
+        
+        @media (max-width: 640px) {
+            .nav-switch-btn { padding-left: 1rem; padding-right: 1rem; height: 40px; }
+            .nav-switch-btn i { font-size: 1.1rem; }
+            .nav-switch-btn span { display: none; }
+        }
+
+        /* --- ŠTÝLY PRE POZNÁMKY (Quill) --- */
+        #editor-container { font-family: 'Inter', sans-serif; font-size: 15px; }
+        .ql-toolbar.ql-snow { border: none !important; border-bottom: 1px solid #e5e7eb !important; background-color: #f8fafc; border-radius: 0.75rem 0.75rem 0 0; padding: 12px !important; }
+        .ql-container.ql-snow { border: none !important; border-radius: 0 0 0.75rem 0.75rem; }
+        .ql-editor { min-height: 500px; padding: 1.5rem !important; }
+
+        /* --- ŠTÝLY PRE EXAM TRENAŽÉR (Kvíz) --- */
+        .opt-default { background-color: #ffffff; border-color: #e2e8f0; color: #334155; cursor: pointer; }
+        .opt-default:hover { background-color: #f1f5f9; border-color: #cbd5e1; }
+        .opt-correct { background-color: #ecfdf5; border-color: #10b981; color: #065f46; box-shadow: 0 0 0 1px #10b981; pointer-events: none; }
+        .opt-wrong-user { background-color: #fff1f2; border-color: #f43f5e; color: #9f1239; box-shadow: 0 0 0 1px #f43f5e; pointer-events: none; }
+        .opt-disabled { background-color: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; pointer-events: none; opacity: 0.6; }
+        .option-letter { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-weight: 700; font-size: 13px; margin-right: 12px; flex-shrink: 0; transition: all 0.2s; }
+        .opt-default .option-letter { background-color: #e2e8f0; color: #475569; }
+        .opt-correct .option-letter { background-color: #10b981; color: white; }
+        .opt-wrong-user .option-letter { background-color: #f43f5e; color: white; }
+        .opt-disabled .option-letter { background-color: #cbd5e1; color: #94a3b8; }
+        
+        .quiz-mode-btn { transition: all 0.2s ease; border-bottom: 3px solid transparent; }
+        .quiz-mode-btn.active { background-color: #eff6ff; color: #2563eb; border-bottom-color: #2563eb; }
+        .mistake-badge { background-color: #f43f5e; color: white; padding: 2px 6px; border-radius: 99px; font-size: 11px; margin-left: 5px; }
+    </style>
+</head>
+<body class="antialiased theme-light" id="main-body">
+
+    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-lg border-b border-gray-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-blue-600 font-bold text-xl">
+                <i class="fa-solid fa-graduation-cap"></i> <span class="hidden sm:inline">Procesné Riadenie</span>
+            </div>
+            
+            <div class="bg-gray-100 p-1 rounded-xl flex gap-2 sm:gap-1 border border-gray-200">
+                <button id="nav-otazky" onclick="switchTab('otazky')" class="nav-switch-btn active px-4 py-1.5 rounded-lg text-sm font-semibold text-gray-600 flex items-center gap-2 hover:text-gray-900">
+                    <i class="fa-solid fa-brain"></i> <span>Flashcards</span>
+                </button>
+                <button id="nav-quiz" onclick="switchTab('quiz')" class="nav-switch-btn px-4 py-1.5 rounded-lg text-sm font-semibold text-gray-600 flex items-center gap-2 hover:text-gray-900">
+                    <i class="fa-solid fa-list-check"></i> <span>Trenažér</span>
+                </button>
+                <button id="nav-poznamky" onclick="switchTab('poznamky')" class="nav-switch-btn px-4 py-1.5 rounded-lg text-sm font-semibold text-gray-600 flex items-center gap-2 hover:text-gray-900">
+                    <i class="fa-solid fa-note-sticky"></i> <span>Poznámky</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div id="view-otazky" class="flex-grow flex flex-col w-full">
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-blue-600 text-white p-3 rounded-lg shadow-md">
+                            <i class="fa-solid fa-bolt text-2xl"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800">Skriptá: Otázky a Odpovede</h2>
+                            <p class="text-sm text-gray-500 font-medium hidden sm:block">Kliknutím na kartu zobrazíš vypracovanú odpoveď zo skrípt</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-4 w-full md:w-auto">
+                        <button onclick="shuffleCards()" class="bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 text-sm shadow-sm">
+                            <i class="fa-solid fa-shuffle"></i> Zamiešať
+                        </button>
+                        <div class="w-full md:w-48 bg-gray-200 rounded-full h-4 shadow-inner relative overflow-hidden">
+                            <div id="progress-bar" class="bg-gradient-to-r from-green-400 to-emerald-500 h-4 rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                        <span id="progress-text" class="text-sm font-bold text-gray-600 whitespace-nowrap">0 / 49 (0%)</span>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex flex-wrap gap-2 justify-center filter-scroll" id="filters-container-q">
+                    <button onclick="filterCards('Všetky')" class="btn-filter-q active px-4 py-1.5 rounded-full border border-gray-300 text-sm font-medium transition-colors hover:bg-gray-100 text-gray-700">Všetky</button>
+                    <button onclick="filterCards('Na precvičenie')" class="btn-filter-q px-4 py-1.5 rounded-full border border-yellow-300 bg-yellow-50 text-sm font-medium transition-colors hover:bg-yellow-100 text-yellow-800"><i class="fa-solid fa-star text-yellow-500 mr-1"></i> Precvičenie</button>
+                    <button onclick="filterCards('Základy Procesov')" class="btn-filter-q px-4 py-1.5 rounded-full border border-gray-300 text-sm font-medium transition-colors hover:bg-gray-100 text-gray-700"><i class="fa-solid fa-industry text-blue-500 mr-1"></i> Základy Procesov</button>
+                    <button onclick="filterCards('Modelovanie a Simulácia')" class="btn-filter-q px-4 py-1.5 rounded-full border border-gray-300 text-sm font-medium transition-colors hover:bg-gray-100 text-gray-700"><i class="fa-solid fa-cubes text-purple-500 mr-1"></i> Modelovanie</button>
+                    <button onclick="filterCards('BPMN')" class="btn-filter-q px-4 py-1.5 rounded-full border border-gray-300 text-sm font-medium transition-colors hover:bg-gray-100 text-gray-700"><i class="fa-solid fa-project-diagram text-pink-500 mr-1"></i> BPMN</button>
+                    <button onclick="filterCards('BPM a Bizagi')" class="btn-filter-q px-4 py-1.5 rounded-full border border-gray-300 text-sm font-medium transition-colors hover:bg-gray-100 text-gray-700"><i class="fa-solid fa-cogs text-emerald-500 mr-1"></i> BPM a Bizagi</button>
+                    <button onclick="filterCards('Process Mining')" class="btn-filter-q px-4 py-1.5 rounded-full border border-gray-300 text-sm font-medium transition-colors hover:bg-gray-100 text-gray-700"><i class="fa-solid fa-chart-network text-orange-500 mr-1"></i> Process Mining</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full">
+            <div id="cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </main>
+    </div>
+
+    <div id="view-quiz" class="hidden flex-grow flex flex-col w-full font-inter text-slate-800">
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-emerald-600 text-white p-3 rounded-lg shadow-md">
+                            <i class="fa-solid fa-check-double text-2xl"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800 leading-tight">Exam Trenažér</h2>
+                            <p class="text-sm text-gray-500 font-medium" id="stats-text">Zodpovedané: 0/0 | Úspešnosť: 0%</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-1 justify-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                        <button onclick="setQuizMode('training')" id="btn-quiz-training" class="quiz-mode-btn active px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">Tréning</button>
+                        <button onclick="setQuizMode('study')" id="btn-quiz-study" class="quiz-mode-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">Len odpovede</button>
+                        <button onclick="setQuizMode('mistakes')" id="btn-quiz-mistakes" class="quiz-mode-btn px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">História chýb <span id="mistake-count" class="mistake-badge">0</span></button>
+                        <button onclick="resetQuiz()" class="px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 text-rose-600 hover:bg-rose-100 transition-colors ml-2" title="Začať test odznova">
+                            <i class="fa-solid fa-rotate-right"></i> Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full">
+            <div id="quiz-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+        </main>
+    </div>
+
+    <div id="view-poznamky" class="hidden flex-grow flex flex-col w-full">
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <div class="flex items-center gap-3">
+                    <div class="bg-purple-600 text-white p-3 rounded-lg shadow-md">
+                        <i class="fa-solid fa-book-bookmark text-2xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">Moje Poznámky</h2>
+                        <p class="text-sm text-gray-500 font-medium">Poznámky zo skrípt. Ukladajú sa automaticky do tvojho prehliadača.</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow max-w-5xl mx-auto px-4 py-8 w-full flex flex-col h-full">
+            <div class="bg-white rounded-xl shadow-lg border border-gray-200 flex-grow flex flex-col" style="min-height: 600px;">
+                <div id="editor-container" class="flex-grow">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        /* ========================================================
+           HLAVNÁ NAVIGÁCIA (PREPÍNANIE TABOV)
+        ======================================================== */
+        function switchTab(tab) {
+            const views = ['otazky', 'quiz', 'poznamky'];
+            
+            // Skry všetko a resetuj tlačidlá
+            views.forEach(v => {
+                document.getElementById(`view-${v}`).classList.add('hidden');
+                const btn = document.getElementById(`nav-${v}`);
+                if(btn) {
+                    btn.classList.remove('active', 'bg-blue-600', 'text-white');
+                    btn.classList.add('text-gray-600');
+                }
+            });
+
+            // Zobraz vybraný tab
+            const activeView = document.getElementById(`view-${tab}`);
+            const activeBtn = document.getElementById(`nav-${tab}`);
+            
+            if(activeView) activeView.classList.remove('hidden');
+            if(activeBtn) {
+                activeBtn.classList.add('active', 'bg-blue-600', 'text-white');
+                activeBtn.classList.remove('text-gray-600');
+            }
+
+            // Focus na editor, ak sme v poznámkach
+            if (tab === 'poznamky' && typeof quill !== 'undefined') {
+                quill.focus();
+            }
+        }
+
+        /* ========================================================
+           TAB 1: DÁTA A LOGIKA PRE FLASHCARDS
+        ======================================================== */
+        const dbOtazky = [
+            // Základy Procesov
+            { id: 1, cat: "Základy Procesov", icon: "fa-industry", color: "#3b82f6", 
+              q: "Vysvetlite procesný pohľad na podnik a rozdiely oproti funkčnému pohľadu.", 
+              a: "<div class='space-y-3 text-sm'><div class='bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500'><b class='text-blue-700 block mb-1'>Funkčný pohľad</b>Historický prístup. Manažéri sa špecializujú úzko len na svoje oddelenia, podnik je riadený prísne vertikálne cez finančné ukazovatele.</div><div class='bg-green-50 p-3 rounded-lg border-l-4 border-green-500'><b class='text-green-700 block mb-1'>Procesný pohľad</b>Moderný prístup. Vníma podnik ako horizontálny hodnotový reťazec. Procesy prestupujú viacerými oddeleniami s cieľom doručiť finálnu hodnotu zákazníkovi.</div></div>" },
+            { id: 2, cat: "Základy Procesov", icon: "fa-gears", color: "#3b82f6", 
+              q: "Popíšte všeobecne, čo je podnikový proces.", 
+              a: "Súhrn logicky usporiadaných činností, ktoré prostredníctvom ľudí a nástrojov <span class='hl-blue'>transformujú vstupy na výstupy</span>.<br><br><b class='block mb-2 text-gray-800'>Znaky:</b><ul class='list-disc pl-5 space-y-1.5 text-sm'><li>Využíva zdroje.</li><li>Má stanovený začiatok a koniec, reaguje na spúšťacie signály.</li><li>Má <span class='hl-green'>merateľné parametre</span> (čas, náklady, kvalita).</li><li>O jeho fungovanie sa stará <span class='hl-purple'>vlastník procesu</span>.</li></ul>" },
+            { id: 3, cat: "Základy Procesov", icon: "fa-sitemap", color: "#3b82f6", 
+              q: "Aké členenie je typické pre podnikové procesy?", 
+              a: "<b class='block mb-2 text-gray-800 text-sm'>Podľa zákazníkov a cieľov:</b><ul class='list-disc pl-5 space-y-2 text-sm'><li><span class='hl-purple'>Riadiace:</span> Definovanie cieľov a plánovanie.</li><li><span class='hl-green'>Základné/Kľúčové:</span> Výsledkom je samotný produkt (majú hodnotu pre koncového zákazníka).</li><li><span class='hl-orange'>Vedľajšie:</span> Pre externého zákazníka, ale nepodieľajú sa na hlavnej činnosti.</li><li><span class='hl-blue'>Podporné:</span> Vytvárajú predpoklady pre hlavné procesy (zákazník ich nevidí).</li><li><span class='hl-red'>Zdieľané:</span> Výlučne pre interného zákazníka (napr. spracovanie objednávok).</li></ul>" },
+            { id: 4, cat: "Základy Procesov", icon: "fa-code-branch", color: "#3b82f6", 
+              q: "Aký je rozdiel medzi workflow a podnikovým procesom?", 
+              a: "<div class='space-y-3 text-sm'><div class='bg-gray-50 p-3 rounded-lg border-l-4 border-gray-400'><b class='text-gray-700 block mb-1'>Podnikový proces</b>Abstraktný sled krokov pre fungovanie firmy.</div><div class='bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500'><b class='text-blue-700 block mb-1'>Workflow</b>Priama <span class='hl-blue'>automatizácia</span> tohto procesu. Je riadené, definované a spúšťané softvérom (WfMS). Odovzdáva úlohy a dokumenty podľa prísnych procedurálnych pravidiel.</div></div>" },
+            { id: 5, cat: "Základy Procesov", icon: "fa-clone", color: "#3b82f6", 
+              q: "Aký je rozdiel medzi modelom podniku a jeho inštanciou?", 
+              a: "<ul class='list-disc pl-5 space-y-3 text-sm'><li><span class='hl-blue'>Model procesu (šablóna):</span> Popisuje abstraktný teoretický postup práce (ako by sa to malo robiť). Napr. všeobecný proces reklamácie.</li><li><span class='hl-green'>Inštancia procesu:</span> Konkrétne jedno prevedenie uskutočnené podľa modelu. Napr. konkrétna oprava jedného kusu tovaru v praxi.</li></ul>" },
+            { id: 6, cat: "Základy Procesov", icon: "fa-layer-group", color: "#3b82f6", 
+              q: "Aké typy workflow sa v súčasnosti používajú v praxi?", 
+              a: "<ul class='list-disc pl-5 space-y-2 text-sm'><li><span class='hl-blue'>Administratívne:</span> Rutinná agenda, masové opakovanie.</li><li><span class='hl-green'>Kolaboratívne:</span> Tímová spolupráca, vysoká dynamika, tvorba spoločného dokumentu.</li><li><span class='hl-red'>Produkčné:</span> Chod kľúčových procesov tvoriacich hodnotu, nízka flexibilita.</li><li><span class='hl-orange'>Ad hoc:</span> Riešenie výnimiek a unikátnych nestandardných situácií.</li></ul>" },
+            { id: 7, cat: "Základy Procesov", icon: "fa-pen-nib", color: "#3b82f6", 
+              q: "Aké metódy popisu podnikových procesov poznáte?", 
+              a: "<ol class='list-decimal pl-5 space-y-2 text-sm'><li><span class='hl-blue'>Neformálne:</span> Prirodzený jazyk (text). Neprehľadné, bez syntaxe.</li><li><span class='hl-purple'>Semiformálne:</span> Grafické notácie (BPMN, UML). Presná syntax, voľnejšia sémantika, prehľadné a umožňujú analýzu.</li><li><span class='hl-green'>Formálne:</span> Precízna sémantika a syntax. Úplne jednoznačný opis pre WfMS / ERP systémy bez možnosti zlého výkladu.</li></ol>" },
+            // Modelovanie a Simulácia
+            { id: 8, cat: "Modelovanie a Simulácia", icon: "fa-eye-slash", color: "#a855f7", 
+              q: "K čomu sa využíva abstrakcia pri vytváraní modelov?", 
+              a: "Zabezpečuje <span class='hl-purple'>odfiltrovanie všetkých detailov</span>, ktoré nie sú kritické pre skúmanie (keďže reálne svety sú príliš zložité).<br><br>Tým umožňuje analytikom lepšie premýšľať a jasnejšie o problematike komunikovať." },
+            { id: 9, cat: "Modelovanie a Simulácia", icon: "fa-clock", color: "#a855f7", 
+              q: "Aké systémy rozlišujeme v súvislosti s časom, ktorý ich ovplyvňuje?", 
+              a: "<div class='space-y-3 text-sm'><div class='bg-gray-50 p-3 rounded-lg border-l-4 border-gray-400'><b class='text-gray-700 block mb-1'>Statické systémy</b>Čas nehrá žiadnu úlohu a zanedbáva sa.</div><div class='bg-orange-50 p-3 rounded-lg border-l-4 border-orange-500'><b class='text-orange-700 block mb-1'>Dynamické systémy</b>Čas je určujúci prvok. Systém sa nachádza v stave, ktorý sa <span class='hl-orange'>v čase mení pod vplyvom udalostí</span>.</div></div>" },
+            { id: 10, cat: "Modelovanie a Simulácia", icon: "fa-lightbulb", color: "#a855f7", 
+              q: "Čo znamená pojem apriórna informácia?", 
+              a: "Ide o <span class='hl-blue'>počiatočnú a predbežnú vedomosť</span> o skúmanom objekte.<br><br>Ak je dostatočne komplexná, dokážeme s ňou pracovať bez zdĺhavého výskumu. Ak ju nemáme, stáva sa nutnosťou tvoriť modely." },
+            { id: 11, cat: "Modelovanie a Simulácia", icon: "fa-people-arrows", color: "#a855f7", 
+              q: "Vysvetlite rozdiel medzi modelovaným a modelujúcim systémom.", 
+              a: "<ul class='list-disc pl-5 space-y-3 text-sm'><li><span class='hl-red'>Modelovaný systém:</span> Samotný skúmaný originál (realita).</li><li><span class='hl-green'>Modelujúci systém:</span> Nový analogický systém (náhrada).</li></ul>Experimenty sa vykonávajú na <b>modelujúcom</b> systéme s cieľom získať využiteľné informácie o <b>modelovanom</b> systéme." },
+            { id: 12, cat: "Modelovanie a Simulácia", icon: "fa-cube", color: "#a855f7", 
+              q: "Aké sú to singulárne modely?", 
+              a: "Sú to také modely, ktoré skúmajú len <span class='hl-blue'>jeden jediný objekt</span> stanoveného rozmeru.<br><br><i>Príklad:</i> Analýza konkurencieschopnosti výlučne v rámci jednej špecifickej skupiny firiem." },
+            { id: 13, cat: "Modelovanie a Simulácia", icon: "fa-laptop-medical", color: "#a855f7", 
+              q: "Čo je simulácia a aký je rozdiel medzi spojitou a diskrétnou simuláciou?", 
+              a: "Simulácia je technika nahrádzajúca skúmaný systém jeho simulátorom (v počítači) pre experimenty.<br><br><ul class='list-disc pl-5 space-y-2 text-sm mt-2'><li><span class='hl-blue'>Spojitá:</span> Atribúty sa menia plynulo, bez skokov (napr. vo fyzike).</li><li><span class='hl-orange'>Diskrétna:</span> K zmenám nedochádza spojito, ale iba pri výskyte oddelených (diskrétnych) udalostí.</li></ul>" },
+            { id: 14, cat: "Modelovanie a Simulácia", icon: "fa-stopwatch-20", color: "#a855f7", 
+              q: "Popíšte pojem simulárny čas.", 
+              a: "Je to <span class='hl-purple'>'virtuálny' čas</span> počítačového výpočtu.<br><br>Eviduje, koľko času v prebiehajúcej výpočtovej fáze simulácie by zodpovedalo reálnemu času v modelovanom svete." },
+            // BPMN
+            { id: 15, cat: "BPMN", icon: "fa-project-diagram", color: "#ec4899", 
+              q: "K čomu sa notácia BPMN využíva a aký základný diagram používa?", 
+              a: "<ul class='list-disc pl-5 space-y-2 text-sm'><li>Slúži ako univerzálny štandard pre <span class='hl-blue'>grafické modelovanie procesov</span>.</li><li>Rozumejú mu IT vývojári aj biznis manažéri.</li><li>Základným (a jediným) štandardizovaným diagramom je <span class='hl-green'>Business Process Diagram (BPD)</span>.</li></ul>" },
+            { id: 16, cat: "BPMN", icon: "fa-boxes-stacked", color: "#ec4899", 
+              q: "Aké základné kategórie prvkov obsahuje notácia BPMN?", 
+              a: "<b class='block mb-2 text-gray-800'>4 hlavné kategórie:</b><ol class='list-decimal pl-5 space-y-1.5 text-sm'><li><span class='hl-blue'>Tokové objekty</span> (Flow Objects)</li><li><span class='hl-orange'>Spojovacie objekty</span> (Connecting Objects)</li><li><span class='hl-purple'>Plavecké dráhy</span> (Swimlanes)</li><li><span class='hl-green'>Artefakty</span> (Artefacts)</li></ol>" },
+            { id: 17, cat: "BPMN", icon: "fa-shapes", color: "#ec4899", 
+              q: "Vymenujte tokové objekty v notácii BPMN.", 
+              a: "<ul class='list-disc pl-5 space-y-3 text-sm'><li><span class='hl-green'>Udalosť (Event):</span> Kruh. Začiatok, koniec alebo prechodová udalosť.</li><li><span class='hl-blue'>Aktivita (Activity):</span> Obdĺžnik s oblými rohmi. Úkon, ktorý treba vykonať.</li><li><span class='hl-orange'>Brána (Gateway):</span> Diamant. Rozdeľuje alebo spája tok prác.</li></ul>" },
+            { id: 18, cat: "BPMN", icon: "fa-scale-balanced", color: "#ec4899", 
+              q: "Aké sú dôvody modelovania procesov z podnikového a informatického pohľadu?", 
+              a: "<div class='space-y-3 text-sm'><div class='bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500'><b class='text-blue-700 block mb-1'>Podnikový pohľad</b>Pochopiť, zjednodušiť a optimalizovať procesy. Maximalizovať efekt, minimalizovať náklady (BPR metodiky, ISO 9001).</div><div class='bg-purple-50 p-3 rounded-lg border-l-4 border-purple-500'><b class='text-purple-700 block mb-1'>Informatický pohľad</b>Určuje presné <span class='hl-purple'>požiadavky na funkcionalitu IT systémov</span>. Náhľad do biznis logiky pre vývojárov.</div></div>" },
+            // BPM a Bizagi
+            { id: 19, cat: "BPM a Bizagi", icon: "fa-cart-shopping", color: "#10b981", 
+              q: "Popíšte podnikový proces objednávka-hotovosť (order-to-cash).", 
+              a: "Kľúčový proces pokrývajú kompletný predajný cyklus.<br><br><b class='block mb-2 text-gray-800'>Priebeh:</b><ul class='list-disc pl-5 space-y-1.5 text-sm'><li><span class='hl-green'>Štart:</span> Zákazník odošle objednávku.</li><li><span class='hl-blue'>Aktivity:</span> Kontrola, expedícia, doručenie, fakturácia.</li><li><span class='hl-orange'>Koniec:</span> Overenie prijatých financií.</li></ul>" },
+            { id: 20, cat: "BPM a Bizagi", icon: "fa-list-check", color: "#10b981", 
+              q: "Aké etapy identifikácie procesov predchádzajú vytvoreniu procesnej architektúry?", 
+              a: "<ol class='list-decimal pl-5 space-y-3 text-sm'><li><span class='hl-blue'>Označovacia etapa:</span> Identifikuje, aké procesy reálne existujú a stanovuje im hranice (aby neboli príliš robustné).</li><li><span class='hl-orange'>Vyhodnocovacia etapa:</span> Hodnotí nájdené procesy podľa kritérií: dôležitosť, miera dysfunkcie a uskutočniteľnosť zmien.</li></ol>" },
+            { id: 21, cat: "BPM a Bizagi", icon: "fa-magnifying-glass", color: "#10b981", 
+              q: "Aké typy objavovania procesov (Process Discovery) poznáme?", 
+              a: "<ul class='list-disc pl-5 space-y-2 text-sm'><li><span class='hl-blue'>Založené na dôkazoch:</span> Dokumenty, tiché sledovanie, dolovanie logov z IT systémov.</li><li><span class='hl-green'>Založené na rozhovoroch:</span> S účastníkmi (upstream od začiatku, alebo downstream od konca).</li><li><span class='hl-orange'>Založené na workshopoch:</span> Dynamický konsenzus expertov za prítomnosti moderátora.</li></ul>" },
+            { id: 22, cat: "BPM a Bizagi", icon: "fa-chart-pie", color: "#10b981", 
+              q: "Aký je rozdiel medzi kvalitatívnou a kvantitatívnou analýzou procesov?", 
+              a: "<div class='space-y-3 text-sm'><div class='bg-purple-50 p-3 rounded-lg border-l-4 border-purple-500'><b class='text-purple-700 block mb-1'>Kvalitatívna</b>Nerieši tvrdé dáta. Triedi činnosti na tie s pridanou hodnotou a tie, čo sú len odpad. Cieľom je 'štíhly' (lean) proces.</div><div class='bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500'><b class='text-blue-700 block mb-1'>Kvantitatívna</b>Ponúka exaktné zrkadlo cez čísla (KPI). Opiera sa o meranie <span class='hl-blue'>času a nákladov</span>. Využíva simulácie.</div></div>" },
+            { id: 23, cat: "BPM a Bizagi", icon: "fa-server", color: "#10b981", 
+              q: "K čomu slúži BPMS (Business Process Management Systems)?", 
+              a: "Sú to platformy, ktorých účelom nie je len nakresliť model, ale ho <span class='hl-green'>priamo automatizovať a previesť do reálnej prevádzky</span>.<br><br>Pokrývajú celý životný cyklus procesu (návrh, nasadenie, riadenie behu, monitoring a reporting)." },
+            { id: 24, cat: "BPM a Bizagi", icon: "fa-cubes", color: "#10b981", 
+              q: "Z akých častí sa skladá balík Bizagi a k čomu sa používajú?", 
+              a: "<ul class='list-disc pl-5 space-y-2 text-sm'><li><span class='hl-blue'>Modeler:</span> Kreslenie BPD diagramov, dokumentácia, simulácie výkonnosti.</li><li><span class='hl-orange'>Studio:</span> Implementácia modelov do podoby aplikácií (bezložité kódovanie, tvorba formulárov).</li><li><span class='hl-green'>Engine:</span> 'Srdce'. Prevádzkový portál pre zamestnancov na prácu s úlohami + analytika.</li></ul>" },
+            { id: 25, cat: "BPM a Bizagi", icon: "fa-clipboard-user", color: "#10b981", 
+              q: "Akým spôsobom sa pristupuje k budovaniu as-is procesného modelu?", 
+              a: "<ol class='list-decimal pl-5 space-y-2 text-sm'><li><span class='hl-blue'>Zber dokumentácie:</span> Pracovné náplne od vedúcich.</li><li><span class='hl-orange'>Pasívne (tiché) pozorovanie:</span> Tieňovanie pri bežnej agende (tvorba draftu).</li><li><span class='hl-green'>Otvorené rozhovory:</span> Eliminácia 'výnimočného myslenia' účastníkov pre získanie zovšeobecneného modelu.</li></ol>" },
+            { id: 26, cat: "BPM a Bizagi", icon: "fa-flask", color: "#10b981", 
+              q: "K čomu sa v praxi využívajú simulácie podnikových procesov?", 
+              a: "Nástroj pre kvantitatívnu <span class='hl-blue'>'what-if' analytiku</span>.<br><br>Softvér porovnáva vlastnosti súčasného systému a nového procesu. Poskytuje tvrdé dáta, či nový proces naozaj prinesie <span class='hl-green'>finančnú a časovú úsporu</span> ešte pred jeho drahou implementáciou." },
+            { id: 27, cat: "BPM a Bizagi", icon: "fa-hammer", color: "#10b981", 
+              q: "Ako prebieha implementácia procesu v Bizagi (Studio)?", 
+              a: "<ol class='list-decimal pl-5 space-y-1.5 text-sm'><li>Konštrukcia <b>dátového modelu</b> (entity).</li><li>Dizajnovanie <b>užívateľských formulárov</b> (UI).</li><li>Definovanie <b>obchodných pravidiel</b> (riadenie brán).</li><li>Naviazanie aktivít na <b>užívateľov a pozície</b>.</li><li><b>Integrácia</b> s okolím (účtovníctvo, API).</li><li>Vytvorenie portálu a pilotná <b>exekúcia</b>.</li></ol>" },
+            { id: 28, cat: "BPM a Bizagi", icon: "fa-chart-simple", color: "#10b981", 
+              q: "Aké sú hlavné ukazovatele (reporty), ktoré Bizagi Engine sleduje?", 
+              a: "<ul class='list-disc pl-5 space-y-2 text-sm'><li><span class='hl-blue'>Čas cyklu:</span> Štatistiky trvania zavŕšených prípadov.</li><li><span class='hl-orange'>Histogram trvania:</span> Oddeľuje zlyhania a zdržania.</li><li><span class='hl-purple'>Celková aktivita:</span> Pomer úspešných a neúspešných prípadov.</li><li><span class='hl-green'>Frekventované cesty:</span> Najčastejšie využívané vetvy.</li><li>Detailné náhľady na izolované aktivity / anomálie.</li></ul>" },
+            // Process Mining
+            { id: 29, cat: "Process Mining", icon: "fa-gem", color: "#f97316", 
+              q: "Čo je podstatou process miningu?", 
+              a: "Odhaľovanie, modelovanie a pochopenie skrytých trendov skutočného výkonu procesov na základe neviditeľných <span class='hl-blue'>digitálnych záznamov (logov)</span> z informačných systémov.<br><br>Vypĺňa priepasť medzi teoretickou analytikou a dátovými vedami." },
+            { id: 30, cat: "Process Mining", icon: "fa-filter", color: "#f97316", 
+              q: "Vymenujte tri základné typy process miningu.", 
+              a: "<ol class='list-decimal pl-5 space-y-2 text-sm'><li><span class='hl-blue'>Objavovanie (Discovery):</span> Generuje úplne nový model striktne z logov (bez predlohy).</li><li><span class='hl-red'>Zisťovanie zhodnosti (Conformance checking):</span> Porovnáva teóriu (štandardný model) s realitou v logoch. Hľadá odchýlky.</li><li><span class='hl-green'>Zlepšovanie (Enhancement):</span> Rozširuje známe modely o dodatočné info z logov (napr. o časy).</li></ol>" },
+            { id: 31, cat: "Process Mining", icon: "fa-ticket", color: "#f97316", 
+              q: "Čo je to udalosť a prípad v terminológii miningu?", 
+              a: "<ul class='list-disc pl-5 space-y-3 text-sm'><li><span class='hl-blue'>Prípad (Case):</span> Označuje celkovú uzatvorenú inštanciu jedného procesu (napr. jeden klient v banke).</li><li><span class='hl-orange'>Udalosť (Event):</span> Odkazuje na jednorazovú vykonanú aktivitu.</li></ul><i>Axióma:</i> Každá udalosť musí prislúchať vždy jednému a len jednému špecifickému prípadu." },
+            { id: 32, cat: "Process Mining", icon: "fa-equals", color: "#f97316", 
+              q: "Aký je rozdiel medzi prípadom a inštanciou procesu?", 
+              a: "<b class='text-lg text-green-600 block text-center mb-2'>Žiadny.</b><p class='text-sm text-gray-700 text-center'>Oba tieto pojmy sú absolútne identické. 'Prípad' je len alternatívne slovo pre procesnú inštanciu.</p>" },
+            { id: 33, cat: "Process Mining", icon: "fa-file-lines", color: "#f97316", 
+              q: "Čo je to záznam (Log)?", 
+              a: "Dátový súbor vyexportovaný z počítačového systému.<br><br>Je to množina prípadov. Každý prípad má svoj usporiadaný zoznam (stopu) uskutočnených <span class='hl-blue'>udalostí a k nim pridružených atribútov</span> (časy, mená ľudí)." },
+            { id: 34, cat: "Process Mining", icon: "fa-arrow-right-arrow-left", color: "#f97316", 
+              q: "Ako definujeme prechodový systém?", 
+              a: "Matematický model procesu využívajúci iba <span class='hl-orange'>stavy</span> (štart, priebežné, konečné) a konkrétne aktivity sprostredkujúce prechod pomocou <span class='hl-blue'>orientovaných hrán</span>.<br><br>V praxi trpí obmedzením pri zložitých súbežných dejoch (state explosion)." },
+            { id: 35, cat: "Process Mining", icon: "fa-circle-nodes", color: "#f97316", 
+              q: "Ako definujeme Petriho sieť?", 
+              a: "Komplexný model, ktorý obsahuje presne definovanú množinu tzv. <span class='hl-blue'>'miest'</span>, <span class='hl-green'>'prechodov'</span> a usmernení cez hrany.<br><br>Oveľa lepšie ako prechodový systém zvláda modelovanie paralelného konkurenčného správania." },
+            { id: 36, cat: "Process Mining", icon: "fa-tag", color: "#f97316", 
+              q: "Aký je rozdiel medzi Petriho sieťou a značenou Petriho sieťou?", 
+              a: "<div class='space-y-3 text-sm'><div class='bg-gray-50 p-3 rounded-lg border-l-4 border-gray-400'>Klasická určuje len staticky, kadiaľ vedú grafové línie (ako 'potrubie').</div><div class='bg-orange-50 p-3 rounded-lg border-l-4 border-orange-500'>Značená pridáva <span class='hl-orange'>značky (tokeny)</span>, ktoré prechádzajú z miesta na miesto. Model tak ožíva, simuluje aktuálny stav a získava spustiteľnú sémantiku.</div></div>" },
+            { id: 37, cat: "Process Mining", icon: "fa-check-double", color: "#f97316", 
+              q: "Aké tri vlastnosti musí Petriho sieť spĺňať, aby sa jednalo o WF-sieť (WorkFlow net)?", 
+              a: "<ol class='list-decimal pl-5 space-y-2 text-sm'><li>Výhradne len <span class='hl-blue'>jedno vstupné miesto</span> do systému.</li><li>Výhradne len <span class='hl-red'>jedno výstupné miesto</span>, v ktorom prípad končí.</li><li>Stav silnej súvislosti – po prikreslení spätnej teoretickej hrany musí byť sieť <span class='hl-green'>priechodná</span>.</li></ol>" },
+            { id: 38, cat: "Process Mining", icon: "fa-shield-halved", color: "#f97316", 
+              q: "Aké vlastnosti musí Petriho sieť spĺňať, aby bola spoľahlivá (Soundness)?", 
+              a: "<ol class='list-decimal pl-5 space-y-1.5 text-sm'><li><span class='hl-blue'>Bezpečnosť</span> (max. 1 značka v uzle v rovnakom čase).</li><li><span class='hl-green'>Riadne dokončenie</span> (dosiahnutie konca model vyčistí bez reziduálnych značiek).</li><li><span class='hl-purple'>Možnosť dokončenia</span> bez ohľadu na stav.</li><li><span class='hl-orange'>Absencia mŕtvych častí</span> (každý prechod má teoretickú šancu na aktiváciu).</li></ol>" },
+            { id: 39, cat: "Process Mining", icon: "fa-magnifying-glass-chart", color: "#f97316", 
+              q: "Čo je podstatou process miningového prístupu zisťovania zhodnosti?", 
+              a: "Softvér konfrontuje <span class='hl-blue'>formálny teoretický model</span> s tvrdými reálnymi <span class='hl-orange'>dátami z logov</span>.<br><br>Úlohou je lokalizovať odchýlky, anomálie a nedodržiavanie predpísaných postupov a pravidiel zamestnancami." },
+            { id: 40, cat: "Process Mining", icon: "fa-code-compare", color: "#f97316", 
+              q: "Aký je rozdiel medzi deskriptívnym a normatívnym modelom?", 
+              a: "<div class='space-y-3 text-sm'><div class='bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500'><b class='text-blue-700 block mb-1'>Deskriptívny</b>Model je vygenerovaný z dát tak, ako veci reálne fungujú.</div><div class='bg-red-50 p-3 rounded-lg border-l-4 border-red-500'><b class='text-red-700 block mb-1'>Normatívny</b>Prísny model vložený manažmentom 'zhora' (ako by sa veci mali robiť). Oproti nemu sa skúma zhodnosť chovania zamestnancov.</div></div>" },
+            { id: 41, cat: "Process Mining", icon: "fa-star-half-stroke", color: "#f97316", 
+              q: "Ktoré 4 kritériá používame pre hodnotenie kvality objavených modelov?", 
+              a: "<ol class='list-decimal pl-5 space-y-1.5 text-sm'><li><span class='hl-blue'>Zhodnosť (Fitness):</span> Či model zvládne prehrať drvivú väčšinu histórie z logov.</li><li><span class='hl-green'>Presnosť (Precision):</span> Bráni nedoučeniu (aby model nepovolil cesty, ktoré neexistujú).</li><li><span class='hl-orange'>Generalizácia:</span> Bráni preučeniu (overfitting). Nechce len detailnú fotku jedného dňa, ale zovšeobecnené správanie.</li><li><span class='hl-purple'>Jednoduchosť:</span> Preferovanie minimalizmu (Occamova britva).</li></ol>" },
+            { id: 42, cat: "Process Mining", icon: "fa-binoculars", color: "#f97316", 
+              q: "Aké process miningové perspektívy poznáte?", 
+              a: "<ul class='list-disc pl-5 space-y-3 text-sm'><li><span class='hl-blue'>Organizačná:</span> Analýza ľudí ako zdrojov. Mapuje sociálne siete pracovníkov, kto si s kým posúva úlohy a kto má hlavné slovo.</li><li><span class='hl-orange'>Časová:</span> Zameriava sa na výkonnosť a časy (napr. hľadanie 'úzkych hrdiel', kde sa materiál zasekáva a trvá to dni miesto hodín).</li></ul>" },
+            { id: 43, cat: "Process Mining", icon: "fa-file-code", color: "#f97316", 
+              q: "Čo je to MXML?", 
+              a: "<span class='hl-blue'>Mining eXtensible Markup Language</span>.<br><br>Štandardná, ale dnes už pomerne oklieštená a zastaraná špecifikácia formátu procesných dát (vznikla r. 2003, priekopník pre ukladanie stôp pre softvér ProM)." },
+            { id: 44, cat: "Process Mining", icon: "fa-file-xml", color: "#f97316", 
+              q: "Čo je to XES?", 
+              a: "<span class='hl-green'>eXtensible Event Stream</span>.<br><br>Aktuálny oficiálny a plne uznávaný štandard (IEEE) pre dolovanie dát so širšími možnosťami prispôsobenia pre atribúty. Pracuje s ním dnes každý relevantný analytický systém." },
+            { id: 45, cat: "Process Mining", icon: "fa-code", color: "#f97316", 
+              q: "Je syntax XES založená na jazyku XML?", 
+              a: "<b class='text-lg text-blue-600 block text-center mb-2'>Áno.</b><p class='text-sm text-gray-700 text-center'>Rovnako ako MXML, plne rešpektuje a využíva značkovací stromový dizajn a syntax XML, čo dovoľuje zachovávať atribúty pod presnými označeniami.</p>" },
+            { id: 46, cat: "Process Mining", icon: "fa-file-csv", color: "#f97316", 
+              q: "Aké ďalšie formáty dát sú použiteľné v dolovaní?", 
+              a: "Systémy majú univerzálnu konverziu a prijímajú takmer akékoľvek ploché dáta, ak im vieme zadefinovať stĺpce.<br><br><b class='block mt-2 text-gray-800'>Napríklad:</b> <span class='hl-blue'>CSV, TXT, FBT, XLS/XLSX (Excel)</span>." },
+            { id: 47, cat: "Process Mining", icon: "fa-bowl-food", color: "#f97316", 
+              q: "Aký je rozdiel medzi špagetovým a lasagna procesom?", 
+              a: "<div class='space-y-3 text-sm'><div class='bg-green-50 p-3 rounded-lg border-l-4 border-green-500'><b class='text-green-700 block mb-1'>Lasagna proces</b>Prehľadný zmysluplný model s úhľadne oddelenými, neprekrývajúcimi sa logickými líniami.</div><div class='bg-red-50 p-3 rounded-lg border-l-4 border-red-500'><b class='text-red-700 block mb-1'>Špagetový proces</b>Absolútny chaos prepletených čiar s absurdným množstvom vetvení. Nutnosť využiť analytické posuvníky pre redukciu prebytočných ciest.</div></div>" },
+            { id: 48, cat: "Process Mining", icon: "fa-calculator", color: "#f97316", 
+              q: "Aké poznáte ďalšie objavovacie techniky okrem alfa-algoritmu?", 
+              a: "<ul class='list-disc pl-5 space-y-1.5 text-sm'><li><span class='hl-blue'>Heuristic mining:</span> Toleruje hluk v dátach, kauzálne siete podľa štatistiky frekvencií.</li><li><span class='hl-green'>Genetic mining:</span> Evolučný prístup (reprodukcia, mutácie modelov).</li><li><span class='hl-orange'>Region-based mining:</span> Konštruuje Petriho siete hľadaním skrytých regiónov.</li><li><span class='hl-purple'>Inductive mining:</span> Pracuje na princípe procesných stromov. Mimoriadne spoľahlivá a bez mŕtvych častí (deadlockov).</li></ul>" },
+            { id: 49, cat: "Process Mining", icon: "fa-arrows-spin", color: "#f97316", 
+              q: "S čím súvisí pojem životný cyklus transakcie (Transactional Life-Cycle)?", 
+              a: "Súvisí so skutočnosťou, že zložitejšie udalosti nezaberajú len bod v čase, ale pohlcujú nejaký čas (minúty, hodiny).<br><br>Preto logy pre transakčný model vyžadujú oddelenú informáciu pri záchyte jej <span class='hl-green'>odštartovania ('start')</span> a informáciu o úspešnom <span class='hl-red'>uzavretí úlohy ('complete')</span>." }
+        ];
+
+        let qFilter = 'Všetky';
+        let flipped = new Set();
+        let displayQ = [...dbOtazky];
+        let starredCards = new Set(JSON.parse(localStorage.getItem('smartIsStarred') || '[]'));
+
+        function renderOtazkyGrid() {
+            const grid = document.getElementById('cards-grid');
+            grid.innerHTML = '';
+            
+            let filtered = displayQ;
+            if (qFilter === 'Na precvičenie') {
+                filtered = displayQ.filter(i => starredCards.has(i.id));
+            } else if (qFilter !== 'Všetky') {
+                filtered = displayQ.filter(i => i.cat === qFilter);
+            }
+
+            if (filtered.length === 0 && qFilter === 'Na precvičenie') {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-gray-500 font-medium flex flex-col items-center"><i class="fa-solid fa-star text-4xl mb-3 text-gray-300"></i><p>Zatiaľ nemáš vybrané žiadne otázky na precvičenie.</p></div>`;
+                updateProgress(0);
+                return;
+            }
+            
+            const html = filtered.map(data => {
+                const isFlipped = flipped.has(data.id) ? 'flipped' : '';
+                const isStarredClass = starredCards.has(data.id) ? 'fa-solid fa-star text-yellow-500' : 'fa-regular fa-star text-gray-300 hover:text-yellow-400';
+                
+                return `
+                <div class="flashcard-container" onclick="handleFlip(${data.id}, this)">
+                    <div class="flashcard ${isFlipped}">
+                        <div class="flashcard-front" style="border-top-color: ${data.color}">
+                            <i class="${data.icon} watermark"></i>
+                            <div class="content-z flex flex-col h-full justify-between">
+                                <div>
+                                    <div class="flex justify-between items-start mb-4">
+                                        <span class="text-xs font-bold px-2 py-1 rounded text-white" style="background-color: ${data.color}">${data.cat}</span>
+                                        <div class="flex items-center gap-2 relative z-20">
+                                            <button onclick="toggleStar(${data.id}, event)" class="star-btn focus:outline-none transition-transform hover:scale-110" title="Pridať na precvičenie">
+                                                <i class="${isStarredClass} text-lg"></i>
+                                            </button>
+                                            <span class="text-sm font-bold text-gray-400 border border-gray-200 px-2 py-1 rounded-full">#${data.id}</span>
+                                        </div>
+                                    </div>
+                                    <h3 class="text-lg font-bold text-gray-800 leading-snug">${data.q}</h3>
+                                </div>
+                                <div class="text-center mt-4 text-sm text-gray-400 font-medium"><i class="fa-solid fa-hand-pointer"></i> Klikni pre odpoveď</div>
+                            </div>
+                        </div>
+                        <div class="flashcard-back" style="border-top-color: ${data.color}">
+                            <i class="${data.icon} watermark"></i>
+                            <div class="scroll-container">
+                                <div class="content-z flex flex-col min-h-full">
+                                    <div class="text-xs text-gray-400 font-bold mb-3 pb-2 border-b border-gray-100 flex justify-between items-center">
+                                        <span>Odpoveď</span>
+                                        <div class="flex items-center gap-2 relative z-20">
+                                            <button onclick="toggleStar(${data.id}, event)" class="star-btn focus:outline-none transition-transform hover:scale-110" title="Pridať na precvičenie">
+                                                <i class="${isStarredClass} text-lg"></i>
+                                            </button>
+                                            <span>#${data.id}</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-gray-700 leading-relaxed text-[15px] flex-grow">${data.a}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            grid.innerHTML = html;
+            updateProgress(filtered.length);
+        }
+
+        function toggleStar(id, event) {
+            event.stopPropagation();
+            if (starredCards.has(id)) {
+                starredCards.delete(id);
+            } else {
+                starredCards.add(id);
+            }
+            localStorage.setItem('smartIsStarred', JSON.stringify([...starredCards]));
+            renderOtazkyGrid();
+        }
+
+        function handleFlip(id, el) {
+            const card = el.querySelector('.flashcard');
+            card.classList.toggle('flipped');
+            if (card.classList.contains('flipped')) {
+                flipped.add(id);
+            } else {
+                flipped.delete(id);
+            }
+            const currentFilterCount = qFilter === 'Na precvičenie' ? starredCards.size : (qFilter === 'Všetky' ? dbOtazky.length : displayQ.filter(i => i.cat === qFilter).length);
+            updateProgress(currentFilterCount);
+        }
+
+        function updateProgress(totalCurrentFilter = dbOtazky.length) {
+            let flippedInView = 0;
+            const currentCardsIds = Array.from(document.querySelectorAll('.flashcard-container .text-sm.text-gray-400.border')).map(el => parseInt(el.innerText.replace('#', '')));
+            
+            flipped.forEach(id => {
+                if (currentCardsIds.includes(id)) flippedInView++;
+            });
+
+            const t = totalCurrentFilter;
+            const p = t === 0 ? 0 : Math.round((flippedInView/t)*100);
+            
+            document.getElementById('progress-bar').style.width = `${p}%`;
+            document.getElementById('progress-text').innerText = `${flippedInView} / ${t} (${p}%)`;
+        }
+
+        function filterCards(cat) {
+            qFilter = cat;
+            flipped.clear();
+            document.querySelectorAll('.btn-filter-q').forEach(b => {
+                b.classList.remove('active', 'bg-blue-600', 'text-white', 'bg-yellow-50', 'text-yellow-800', 'border-yellow-300');
+                b.classList.add('hover:bg-gray-100', 'text-gray-700', 'border-gray-300');
+                
+                if(b.innerText.includes(cat) || (cat==='Všetky' && b.innerText.trim()==='Všetky')) {
+                    if (cat === 'Na precvičenie') {
+                        b.classList.remove('hover:bg-gray-100', 'text-gray-700', 'border-gray-300');
+                        b.classList.add('bg-yellow-50', 'text-yellow-800', 'border-yellow-300');
+                    } else {
+                        b.classList.add('active');
+                    }
+                }
+            });
+            renderOtazkyGrid();
+        }
+
+        function shuffleCards() {
+            for (let i = displayQ.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [displayQ[i], displayQ[j]] = [displayQ[j], displayQ[i]];
+            }
+            renderOtazkyGrid();
+        }
+
+        /* ========================================================
+           TAB 2: EXAM TRENAŽÉR (DÁTA A LOGIKA)
+        ======================================================== */
+        const quizData = [
+            { q: "Mezi typické podnikové procesy, které se vyskytují ve většině společností, bezesporu patří například", opts: [{t: "hotovost-objednávka", c: false}, {t: "žádná z uvedených možností", c: false}, {t: "vývoj-výzkum", c: false}, {t: "žádost-schválení", c: true}] },
+            { q: "Cyklický čas (cycle time) je", opts: [{t: "maximální čas, který uplyne při vyřizování reklamace", c: false}, {t: "minimální čas, který uplyne při vyřizování reklamace", c: false}, {t: "žádná z uvedených možností", c: false}, {t: "průměrný čas, který uplyne při vyřizování reklamace", c: true}] },
+            { q: "Současné koncepce managementu zdůrazňují", opts: [{t: "učící se organizace a týmová práce", c: true}, {t: "nutnosti funkční orientace podniků", c: false}, {t: "nutnost využívat e-shopy", c: false}, {t: "využívaní alternativních zdrojů energie", c: false}] },
+            { q: "Hodnotovými výhodami zákazníka nejsou", opts: [{t: "vztahy mezi zaměstnanci", c: true}, {t: "pověst a image podniku", c: false}, {t: "záruční doba", c: false}, {t: "vlastnosti produktu", c: false}] },
+            { q: "Procesní architektura je", opts: [{t: "model vyspělosti", c: false}, {t: "konceptuální model", c: true}, {t: "procesní model", c: false}, {t: "žádná z uvedených možností", c: false}] },
+            { q: "Program, který řídí výpočet při simulaci", opts: [{t: "řídící experiment", c: false}, {t: "simulační experiment", c: false}, {t: "simulační studie", c: false}, {t: "simulační program", c: true}] },
+            { q: "Aktivita je označení pro činnost, která", opts: [{t: "ohraničuje činnosti v rámci role účastníka podnikového procesu", c: false}, {t: "žádná z uvedených možností", c: false}, {t: "spouští podnikový proces", c: false}, {t: "probíhá ve společnosti", c: true}] },
+            { q: "Mezi aktivity v rámci podnikového procesu nepatří", opts: [{t: "žádná z uvedených možností", c: false}, {t: "aktivity uživatelských interakcí", c: false}, {t: "manuální aktivity", c: false}, {t: "konzultační aktivity", c: true}] },
+            { q: "Základním principem Porterova hodnotového řetězce je", opts: [{t: "řetězec, ve kterém firma generuje náklady", c: false}, {t: "žádná z uvedených možností", c: true}, {t: "radikální změna procesů především s využitím finančních trhů", c: false}, {t: "pyramidová strukturu řízení", c: false}] },
+            { q: "Mezi základní kategorie BPMN prvků nepatří", opts: [{t: "žádná z uvedených možností", c: true}, {t: "tokové objekty", c: false}, {t: "spojovací objekty", c: false}, {t: "plavecké dráhy", c: false}] },
+            { q: "Podstatou modelování ve smyslu výzkumné techniky je", opts: [{t: "žádná z uvedených možností", c: false}, {t: "získat pomocí pokusů (nebo experimentů) s modelem informaci o jeho abstrakci", c: false}, {t: "získat informace o zkoumaném systému", c: true}, {t: "náhrada abstrakce jejím modelem", c: false}] },
+            { q: "Business Process Modeling Notation (BPMN) je", opts: [{t: "soubor grafických objektů a pravidel", c: true}, {t: "metodikou pro návrh implementace IS", c: false}, {t: "objektově orientovaná notace podnikových procesů", c: false}, {t: "žádná z uvedených možností", c: false}] },
+            { q: "Podnikový proces není", opts: [{t: "žádná z uvedených možností", c: false}, {t: "souhrn činností", c: false}, {t: "sekvence událostí", c: true}, {t: "mění vstupy na výstupy", c: false}] },
+            { q: "Model, který je navržen jednou metodou se označuje jako", opts: [{t: "simplexní", c: true}, {t: "singulární", c: false}, {t: "mononukleární", c: false}, {t: "lokální", c: false}] },
+            { q: "Procesní vyspělost se posuzuje na základě", opts: [{t: "modelů podnikových procesů", c: false}, {t: "úrovně vzdělání zaměstnanců podniku", c: false}, {t: "žádná z uvedených možností", c: false}, {t: "úrovně řízení podnikových procesů ve firmě", c: true}] },
+            { q: "Pro fázi implementace procesů platí", opts: [{t: "žádná z uvedených možností", c: false}, {t: "nutným předpokladem automatizace podnikových procesů je podpora formátu, ve kterém se nachází zdrojová data", c: false}, {t: "jsou připravené změny se převádějí do IT technologie...", c: false}, {t: "automatizace představuje vývoj a nasazení ICT technologií a IS, které podporují a spouštějí reálné procesní instance", c: true}] },
+            { q: "Automatizace objevování procesů", opts: [{t: "využívá logovací soubory o událostech", c: true}, {t: "využívá enormní vývoj kryptoměn jako např. Bitcoin", c: false}, {t: "žádná z uvedených možností", c: false}, {t: "těží z faktu, že generované procesní modely jsou nepřehledné a komplexní", c: false}] },
+            { q: "Diskomunikace mezi business a IT oddělením v oblastech jako", opts: [{t: "výdaje na IT / využití výpočetní techniky", c: false}, {t: "změny v legislativě", c: false}, {t: "fragmentace procesní znalosti", c: true}, {t: "žádná z uvedených možností", c: false}] },
+            { q: "Při analýze procesů jako fáze BPM životního cyklu", opts: [{t: "identifikujeme výhody, které vyplývají z dokumentace", c: false}, {t: "identifikujeme problémy, které vyplývají z AS-IS procesních modelů", c: true}, {t: "identifikujeme výhody, které vyplývají z revize procesů (to-be model)", c: false}, {t: "identifikujeme problémy, které vyplývají ze softwarové neefektivnosti", c: false}] },
+            { q: "Mezi techniky kvalitativní analýzy procesů patří", opts: [{t: "analýza přidané hodnoty", c: true}, {t: "procesní simulace", c: false}, {t: "balanced scorecard", c: false}, {t: "výpočet metrik", c: false}] },
+            { q: "Mezi kroky objevování podnikových procesů nepatří", opts: [{t: "žádná z uvedených možností", c: false}, {t: "návrh architektury IS", c: true}, {t: "sběr informací", c: false}, {t: "sestavení týmu", c: false}] },
+            { q: "Pro BPM aktivity je běžné, že", opts: [{t: "doménoví experti umí číst procesní modely, které vytvořil někdo jiný", c: false}, {t: "žádná z uvedených možností", c: false}, {t: "experti nemají problém nad úvahami o konkrétních případech a aktivitách v procesu, zobecnit průběh podnikového procesu pro ně není problém", c: false}, {t: "účastníci podnikového procesu nemají detailní znalost za celý proces", c: true}] },
+            { q: "Co platí pro objevování procesů?", opts: [{t: "Výstupem je jeden nebo několik to-be procesních modelů", c: false}, {t: "jedná se o as-is procesní modelování", c: true}, {t: "žádná z uvedených možností", c: false}, {t: "dokumentuje budoucí stav podnikových procesů", c: false}] },
+            { q: "Při redesignu podnikového procesu musíme vzít v potaz tyto skutečnosti", opts: [{t: "technologie, kterou podnikový proces využívá", c: true}, {t: "jakým způsobem je podnikový proces navržený", c: false}, {t: "strategický pohled na podnikový proces", c: false}, {t: "žádná z uvedených možností", c: false}] },
+            { q: "Mezi základní požadavky na záznam nepatří", opts: [{t: "každý záznam musí obsahovat atribut", c: true}, {t: "události v rámci případů jsou seřazeny", c: false}, {t: "žádná z uvedených možností", c: false}, {t: "každá událost se vyskytuje pouze v rámci jediného případu", c: false}] },
+            { q: "Přechod v případě Petriho sítě je umožněn", opts: [{t: "žádná z uvedených možností", c: false}, {t: "jestliže se ve vstupních místech nenachází žádná značka", c: false}, {t: "jestliže se v alespoň jednom vstupním místě nachází značka", c: false}, {t: "jestliže se v každém vstupním místě nachází alespoň jedna značka", c: true}] },
+            { q: "Mezi základní typy process miningu nepatří", opts: [{t: "identifikace procesů", c: true}, {t: "žádná z uvedených možností", c: false}, {t: "objevování procesů", c: false}, {t: "zjišťování shodnosti", c: false}] },
+            { q: "Jedním z prvních objevovacích algoritmů je", opts: [{t: "beta-algoritmus", c: false}, {t: "inductive mining", c: false}, {t: "alfa-algoritmus", c: true}, {t: "genetic mining", c: false}] },
+            { q: "WF-síť je", opts: [{t: "žádná z uvedených možností", c: false}, {t: "je nadtřída Petriho sítí", c: false}, {t: "je jiné označení Petriho sítě", c: false}, {t: "je podtřída Petriho sítí", c: true}] },
+            { q: "Kromě třech základních typů process miningu známe ještě", opts: [{t: "operační kontrola", c: false}, {t: "organizační kontrola", c: false}, {t: "žádná z uvedených možností", c: false}, {t: "operační podpora", c: true}] },
+            { q: "Process mining je disciplína sjednocující", opts: [{t: "BPM a datové vědy", c: true}, {t: "logistiku a dopravu", c: false}, {t: "řízení podnikových procesů a rozpoznávání obrazu", c: false}, {t: "makroekonomii a mikroekonomii", c: false}] },
+            { q: "Data potřebná pro process miningovou analýzu označujeme jako", opts: [{t: "záznam", c: true}, {t: "blok", c: false}, {t: "sešit", c: false}, {t: "tabulka", c: false}] },
+            { q: "Procesní přístup v současném managementu:", opts: [{t: "je řešen individuálně na zvýšení zisku", c: false}, {t: "vychází z hierarchické organizační struktury podniku", c: false}, {t: "je orientován na uspokojování potřeb zákazníka, vnějšího i vnitřního", c: true}, {t: "je založen na principu dělby práce", c: false}] },
+            { q: "Hlavní procesní modely:", opts: [{t: "se zaměřují na jednotlivé činnosti bez ohledu na vazby", c: false}, {t: "vytvářejí logiku průběhu procesů", c: true}, {t: "umožňují sledování transformace do výsledné p...", c: false}] },
+            { q: "Mezi základní typy procesů nepatří:", opts: [{t: "zákaznické procesy", c: false}, {t: "manažerské procesy", c: false}, {t: "podpůrné procesy", c: false}, {t: "doplňkové procesy", c: true}] },
+            { q: "Která z následujících zkratek není klíčovým faktorem procesního řízení?", opts: [{t: "Řízení lidských zdrojů (Human Resources Management)", c: false}, {t: "Odpovědnost vymezená řádem (OŘ)", c: true}, {t: "Jádro (Core) business procesy", c: false}, {t: "CRM (Customer Relationship Management)", c: false}] },
+            { q: "Rozhodněte, které tvrzení je pravdivé:", opts: [{t: "instance procesu a objekt jsou jedno a totéž", c: false}, {t: "instance procesu a stopa jsou jedno a totéž", c: false}, {t: "stopa a případ jsou jedno a totéž", c: false}, {t: "případ a instance procesu jsou jedno a totéž", c: true}] },
+            { q: "Když má aktivita na vstupu 2 toky, které musí proběhnout, aby se aktivitou tato brána [prošla/otevřela]:", opts: [{t: "XOR-split", c: false}, {t: "OR-join", c: false}, {t: "XOR-join", c: false}, {t: "AND-join", c: true}] },
+            { q: "Když má aktivita na výstupu 2 toky, které můžou probíhat paralelně bránou:", opts: [{t: "XOR-split", c: false}, {t: "OR-split", c: false}, {t: "AND-join", c: false}, {t: "AND-split", c: true}] },
+            { q: "Automatické objevování procesů:", opts: [{t: "využívá anonymní vývoj kryptoměn", c: false}, {t: "těží z faktu, že generované procesy...", c: false}, {t: "využívá logovací soubory a události v IT systémech", c: true}, {t: "používá rozhovory s účastníky procesu", c: false}] },
+            { q: "Automatizovaným zpracováním podnikového procesu je:", opts: [{t: "workflow", c: true}, {t: "e-shop", c: false}, {t: "pool", c: false}, {t: "objekt", c: false}] },
+            { q: "Klíčovou technologií procesního řízení je:", opts: [{t: "řízení vztahů se zákazníky", c: false}, {t: "informační systém podniku", c: false}, {t: "funkční pohled na podnik", c: false}, {t: "informační a komunikační technologie", c: true}] },
+            { q: "Špagetové procesy jsou:", opts: [{t: "ani jedna není správně", c: false}, {t: "strukturované", c: false}, {t: "nestrukturované", c: true}, {t: "jednoduché", c: false}] },
+            { q: "Lasagna procesy jsou:", opts: [{t: "ani jedna není správně", c: false}, {t: "nestrukturované", c: false}, {t: "komplikované", c: false}, {t: "strukturované", c: true}] },
+            { q: "Proces ověření správnosti modelu se nazývá:", opts: [{t: "zkouška", c: false}, {t: "validace", c: false}, {t: "analýza", c: false}, {t: "verifikace", c: true}] },
+            { q: "Mezi základní fáze životního cyklu BPM nepatří:", opts: [{t: "objevení procesů", c: false}, {t: "implementace procesů", c: false}, {t: "izolace procesů", c: true}, {t: "identifikace procesů", c: false}] },
+            { q: "Které z následujících tvrzení jsou podle Porterovy klasifikace podpůrné procesy:", opts: [{t: "vyřizování reklamací zákazníků", c: false}, {t: "upozornění zákazníků na meškající platby za faktury", c: false}, {t: "žádosti zaměstnanců o dovolenou", c: true}, {t: "sestavování výroční zprávy", c: false}] },
+            { q: "Mezi základní metody objevování založené na důkazech nepatří:", opts: [{t: "analýza dat o procesu", c: false}, {t: "manuální objevování procesů", c: true}, {t: "pozorování", c: false}, {t: "analýza dokumentů", c: false}] },
+            { q: "Metody, které se využívají při identifikaci podnikových procesů jsou:", opts: [{t: "výběrová a vyhodnocovací", c: true}, {t: "označovací a vyhodnocovací", c: false}, {t: "výběrová a výsledková", c: false}, {t: "označovací a výsledková", c: false}] },
+            { q: "BPR (Business Process Reengineering) je:", opts: [{t: "jeho cílem je integrovat podnikové procesy", c: false}, {t: "funkční přístup", c: false}, {t: "manažerská technika", c: true}, {t: "jeho cílem je vybudovat sdílené úložiště ve firmě", c: false}] },
+            { q: "Kritérium přesnosti úzce souvisí s pojmem:", opts: [{t: "ďáblův čtyřúhelník", c: false}, {t: "Occamova břitva", c: false}, {t: "přeučení", c: true}, {t: "nedoučení", c: false}] }
+        ];
+
+        let currentQuizMode = 'training';
+        let userAnswers = {}; 
+        let persistentMistakes = new Set(); 
+        let correctCount = 0;
+
+        function loadQuizState() {
+            const savedState = localStorage.getItem('smart_is_quiz_v5');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                userAnswers = state.userAnswers || {};
+                persistentMistakes = new Set(state.mistakes || []);
+                correctCount = state.correctCount || 0;
+            }
+            document.getElementById('mistake-count').innerText = persistentMistakes.size;
+        }
+
+        function saveQuizState() {
+            const state = {
+                userAnswers: userAnswers,
+                mistakes: Array.from(persistentMistakes),
+                correctCount: correctCount
+            };
+            localStorage.setItem('smart_is_quiz_v5', JSON.stringify(state));
+        }
+
+        function renderQuiz() {
+            const container = document.getElementById('quiz-container');
+            container.innerHTML = '';
+            
+            quizData.forEach((item, index) => {
+                if (currentQuizMode === 'mistakes' && !persistentMistakes.has(index)) return;
+
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col";
+                
+                let html = `<div class="p-5 border-b border-slate-100 flex-grow">
+                    <div class="flex items-start gap-3 mb-4">
+                        <div class="bg-blue-100 text-blue-600 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0">${index + 1}</div>
+                        <h3 class="font-bold text-slate-800 text-[14px] leading-snug pt-1">${item.q}</h3>
+                    </div><div class="flex flex-col gap-2">`;
+
+                item.opts.forEach((opt, optIndex) => {
+                    let sClass = 'opt-default';
+                    let icon = '';
+                    let action = `onclick="answerQuestion(${index}, ${optIndex})"`;
+
+                    if (currentQuizMode === 'study') {
+                        sClass = opt.c ? "opt-correct" : "opt-disabled";
+                        icon = opt.c ? '<i class="fa-solid fa-check ml-auto text-emerald-500"></i>' : '';
+                        action = '';
+                    } else if (userAnswers[index] !== undefined) {
+                        action = '';
+                        if (userAnswers[index] === optIndex) {
+                            sClass = opt.c ? "opt-correct" : "opt-wrong-user";
+                            icon = opt.c ? '<i class="fa-solid fa-check ml-auto text-emerald-500"></i>' : '<i class="fa-solid fa-xmark ml-auto text-rose-500"></i>';
+                        } else if (opt.c) {
+                            sClass = "opt-correct opacity-60"; 
+                            icon = '<i class="fa-solid fa-check ml-auto text-emerald-500"></i>';
+                        } else sClass = "opt-disabled";
+                    }
+
+                    html += `<div ${action} class="flex items-center p-3 rounded-xl border transition-all ${sClass}">
+                        <div class="option-letter shadow-sm">${['A','B','C', 'D'][optIndex]}</div>
+                        <span class="text-sm font-medium leading-tight">${opt.t}</span>${icon}
+                    </div>`;
+                });
+                card.innerHTML = html + `</div></div>`;
+                container.appendChild(card);
+            });
+            updateQuizStats();
+        }
+
+        window.answerQuestion = function(qIndex, optIndex) {
+            userAnswers[qIndex] = optIndex;
+            if (quizData[qIndex].opts[optIndex].c) correctCount++;
+            else {
+                persistentMistakes.add(qIndex);
+                document.getElementById('mistake-count').innerText = persistentMistakes.size;
+            }
+            saveQuizState();
+            renderQuiz();
+        }
+
+        window.setQuizMode = function(mode) {
+            currentQuizMode = mode;
+            document.querySelectorAll('.quiz-mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-quiz-${mode}`).classList.add('active');
+            renderQuiz();
+        }
+
+        // NOVÁ FUNKCIA: Reset kvízu
+        window.resetQuiz = function() {
+            if(confirm("Naozaj chceš vymazať všetky svoje odpovede, históriu chýb a začať test úplne odznova?")) {
+                userAnswers = {};
+                correctCount = 0;
+                persistentMistakes.clear();
+                document.getElementById('mistake-count').innerText = 0;
+                saveQuizState();
+                renderQuiz();
+            }
+        }
+
+        function updateQuizStats() {
+            const total = quizData.length;
+            const answered = Object.keys(userAnswers).length;
+            const percent = answered > 0 ? Math.round((correctCount / answered) * 100) : 0;
+            document.getElementById('stats-text').innerText = `Zodpovedané: ${answered}/${total} | Úspešnosť: ${percent}%`;
+        }
+
+
+        /* ========================================================
+           TAB 3: QUILL EDITOR INIT (POZNÁMKY)
+        ======================================================== */
+        var quill = new Quill('#editor-container', {
+            theme: 'snow',
+            placeholder: 'Tu si môžeš písať vlastné poznámky ku skriptám, zvýrazňovať farbami a formátovať kód...',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    [{ 'align': [] }],
+                    ['link', 'image', 'code-block'],
+                    ['clean']
+                ]
+            }
+        });
+
+        const savedNotes = localStorage.getItem('smartIsNotes');
+        if (savedNotes) {
+            quill.root.innerHTML = savedNotes;
+        }
+
+        quill.on('text-change', function() {
+            localStorage.setItem('smartIsNotes', quill.root.innerHTML);
+        });
+
+        /* ========================================================
+           INICIALIZÁCIA PRI NAČÍTANÍ STRÁNKY
+        ======================================================== */
+        renderOtazkyGrid(); // Načíta mriežku pre tab 1 (Flashcards)
+        loadQuizState();    // Načíta pamäť z lokálneho úložiska pre kvíz
+        renderQuiz();       // Načíta mriežku pre tab 2 (Exam Trenažér)
+
+    </script>
+</body>
+</html>
