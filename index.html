@@ -747,10 +747,9 @@
         }
 
 
-      /* ========================================================
+    /* ========================================================
            TAB 3: QUILL EDITOR INIT (POZNÁMKY)
         ======================================================== */
-        // 1. Vlastný handler na kompresiu obrázkov pred ich vložením
         function imageHandler() {
             const input = document.createElement('input');
             input.setAttribute('type', 'file');
@@ -764,9 +763,8 @@
                     reader.onload = (e) => {
                         const img = new Image();
                         img.onload = () => {
-                            // Vytvoríme Canvas na zmenšenie obrázka
                             const canvas = document.createElement('canvas');
-                            const MAX_WIDTH = 800; // Maximálna šírka obrázka v poznámkach
+                            const MAX_WIDTH = 800; 
 
                             let width = img.width;
                             let height = img.height;
@@ -781,7 +779,6 @@
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
 
-                            // Prevedieme späť na text, ale komprimované ako JPG (0.7 = 70% kvalita)
                             const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
 
                             const range = quill.getSelection(true);
@@ -795,7 +792,6 @@
             };
         }
 
-        // 2. Inicializácia Quillu
         var quill = new Quill('#editor-container', {
             theme: 'snow',
             placeholder: 'Tu si môžeš písať vlastné poznámky ku skriptám, zvýrazňovať farbami a formátovať kód...',
@@ -811,27 +807,37 @@
                         ['clean']
                     ],
                     handlers: {
-                        image: imageHandler // Použitie nášho custom handlera
+                        image: imageHandler
                     }
                 }
             }
         });
 
-        // 3. Načítanie existujúcich dát
         const savedNotes = localStorage.getItem('smartIsNotes');
         if (savedNotes) {
             quill.root.innerHTML = savedNotes;
         }
 
-        // 4. Ukladanie s try-catch poistkou
         quill.on('text-change', function() {
             try {
                 localStorage.setItem('smartIsNotes', quill.root.innerHTML);
             } catch (e) {
                 if (e.name === 'QuotaExceededError' || e.code === 22) {
-                    alert('⚠️ Upozornenie: Tvoje poznámky sú príliš veľké a vyčerpali limit prehliadača (5 MB). Najnovšie zmeny alebo obrázky sa neuložili. Zmaž staršie obrázky pre uvoľnenie miesta.');
+                    alert('⚠️ Upozornenie: Tvoje poznámky vyčerpali limit prehliadača. Obrázok alebo text sa neuložil.');
                 }
             }
+        });
+
+        /* ========================================================
+           INICIALIZÁCIA PRI NAČÍTANÍ STRÁNKY (OPRAVENÉ)
+        ======================================================== */
+        document.addEventListener("DOMContentLoaded", function() {
+            renderOtazkyGrid();
+            loadQuizState();
+            renderQuiz();
+            
+            // Vynútené spustenie prvého tabu hneď po načítaní
+            switchTab('otazky');
         });
 
     </script>
